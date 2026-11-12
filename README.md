@@ -10,6 +10,10 @@ needs to see whether tail latency crossed its targets and whether the evidence
 is fresh enough to act on. The Sentinel turns one batch into a reproducible
 verdict and distinguishes stale inputs from an unavailable monitoring target.
 
+## What I built
+
+I built a shared Python evaluator for the CLI and HTTP API so a CSV batch and its JSON equivalent yield the same p95/p99 verdict. The API publishes the latest accepted result and outcome counters to Prometheus. The alert rules separate a fresh latency breach, a missing or stale batch, and a failed scrape. A synthetic 1,100 ms sample triggered the breach rule in a live local scrape.
+
 ## Architecture
 
 ```mermaid
