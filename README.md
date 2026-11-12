@@ -86,3 +86,7 @@ and Kubernetes assets are provided for a separate deployment check.
 A [GitHub Actions workflow template](docs/github-actions/ci.yml) is included.
 The demo HTTP service is intended for local or isolated use. A batch verdict
 is a snapshot, and the percentile estimate is coarse for small samples.
+
+## Project walkthrough
+
+[Observed CLI and API verification](docs/VERIFICATION.md)
