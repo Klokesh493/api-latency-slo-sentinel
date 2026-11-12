@@ -36,13 +36,18 @@ batch of samples and returns a verdict that can be reviewed before continuing.
 
 ```mermaid
 flowchart LR
-    CSV["Latency CSV"] --> CLI["Python CLI"]
-    JSON["JSON latency samples"] --> HTTP["HTTP POST /evaluate"]
-    CLI --> Eval["Shared p95 and p99 evaluator"]
-    HTTP --> Eval
-    Eval --> JSONOut["HTTP JSON verdict"]
-    Eval --> Text["CLI verdict or Prometheus text"]
-    Text --> Collector["Optional node_exporter textfile collector"]
+    CSV["CSV latency samples"] --> CLI["CLI"]
+    JSON["JSON latency samples"] --> HTTP["POST /evaluate"]
+    HTTP --> Validate{"Samples valid and within limits?"}
+    Validate -->|No| Error["HTTP 4xx"]
+    Validate -->|Yes| Eval["Calculate p95 and p99"]
+    CLI --> Eval
+    Eval --> Gate{"Either percentile exceeds its limit?"}
+    Gate -->|Yes| Breach["Breach"]
+    Gate -->|No| Healthy["OK"]
+    Breach --> Result["Verdict via CLI or API"]
+    Healthy --> Result
+    Result --> Metrics["Optional CLI Prometheus snapshot"]
 ```
 
 See the [data flow and architecture](docs/ARCHITECTURE.md), the
