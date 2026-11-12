@@ -2,26 +2,42 @@
 
 ```mermaid
 flowchart LR
-    CSV["CSV latency samples"] --> CLI["CLI"]
-    JSON["JSON latency samples"] --> HTTP["POST /evaluate"]
-    HTTP --> Validate{"Samples valid and within limits?"}
-    Validate -->|No| Error["HTTP 4xx"]
-    Validate -->|Yes| Eval["Calculate p95 and p99"]
+    CSV["CSV batch"] --> CLI["CLI"]
+    JSON["JSON batch"] --> API["HTTP /evaluate"]
+    API --> Validate{"Valid bounded sample?"}
+    Validate -->|No| Reject["4xx and rejected counter"]
+    Validate -->|Yes| Eval["Shared p95/p99 evaluator"]
     CLI --> Eval
-    Eval --> Gate{"Either percentile exceeds its limit?"}
-    Gate -->|Yes| Breach["Breach"]
-    Gate -->|No| Healthy["OK"]
-    Breach --> Result["Verdict via CLI or API"]
-    Healthy --> Result
-    Result --> Metrics["Optional CLI Prometheus snapshot"]
+    Eval --> Verdict["OK or breach"]
+    Verdict --> Snapshot["CLI result or Prometheus snapshot"]
+    Verdict --> Record["Last accepted batch and outcome counters"]
+    Reject --> Scrape["HTTP /metrics"]
+    Record --> Scrape
+    Scrape --> Prom["Prometheus"]
+    Prom --> Rules["Fresh breach, missing or stale sample, scrape down"]
 ```
 
-The evaluator sorts one batch of latency samples and compares p95 and p99
-against 300 ms and 750 ms. The CLI preserves its original verdict and metrics
-formats. The HTTP adapter validates a bounded JSON request before passing it
-to the same evaluator. It stores no request data. The CLI metrics path emits
-a snapshot that can be collected through node_exporter.
+## Decision path
 
-The HTTP server binds to loopback by default. The container is intended for an
-isolated demo and listens on its container interface. The sample deployment
-expects a locally loaded image and access through port forwarding.
+The evaluator sorts one batch of latency samples and compares p95 and p99
+against 300 ms and 750 ms. Both entry points use the same evaluator. The CLI
+can emit a one-shot snapshot for a Prometheus textfile collector. The HTTP API
+validates the input before evaluation and keeps only the latest accepted
+percentiles, verdict, timestamp, and three counters in memory.
+
+Each request updates metric state under one lock so a scrape can observe a
+consistent set of values. The metrics endpoint uses fixed outcome labels.
+Invalid submissions increment the rejection counter and preserve the last
+accepted result and its timestamp.
+
+## Operating boundaries
+
+Prometheus treats an accepted result as fresh for five minutes. At startup
+the timestamp is zero and percentile gauges appear after the first accepted
+evaluation. A failed scrape suppresses latency and freshness alerts. The
+scrape-down alert waits one minute.
+
+The HTTP service defaults to loopback. Docker and Kubernetes expose it for
+an isolated deployment demo. For a live service, collect request distributions
+continuously and establish sample volumes, SLO windows, and an alert policy
+with the service owner.

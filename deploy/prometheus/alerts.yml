@@ -1,0 +1,28 @@
+groups:
+  - name: latency-sentinel
+    rules:
+      - alert: LatencySentinelFreshBreach
+        expr: |
+          api_latency_slo_breach{job="latency-sentinel"} == 1
+            and (time() - api_latency_last_evaluation_timestamp_seconds < 300)
+            and (up{job="latency-sentinel"} == 1)
+        labels:
+          severity: warning
+        annotations:
+          summary: Latest latency batch crossed a threshold
+      - alert: LatencySentinelNoFreshBatch
+        expr: |
+          ((api_latency_last_evaluation_timestamp_seconds{job="latency-sentinel"} == 0)
+            or (time() - api_latency_last_evaluation_timestamp_seconds >= 300))
+            and (up{job="latency-sentinel"} == 1)
+        labels:
+          severity: warning
+        annotations:
+          summary: No fresh latency batch is available
+      - alert: LatencySentinelScrapeDown
+        expr: up{job="latency-sentinel"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Prometheus cannot scrape the latency sentinel

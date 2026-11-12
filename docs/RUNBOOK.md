@@ -47,3 +47,25 @@ Check that latency input is in milliseconds. The Prometheus export converts it t
 ## Operating limits
 
 Use the [case study](CASE_STUDY.md) to check assumptions before applying a result to a live environment.
+
+## Reproduce an alert locally
+
+1. Start `python3 api.py` and, in another terminal, start
+   `prometheus --config.file=deploy/prometheus/prometheus.yml`.
+2. Submit the breach batch from the [README](../README.md). Confirm that
+   `/metrics` shows `api_latency_slo_breach 1` and a nonzero
+   `api_latency_last_evaluation_timestamp_seconds`.
+3. Open the local Prometheus Alerts page at `http://localhost:9090/alerts`.
+   Allow up to 45 seconds for target discovery, scrape, and rule evaluation.
+4. Submit `{"latency_ms":[90,110,125]}` using the same command. Verify that
+   the breach gauge returns to zero and the breach alert clears.
+
+| Alert or symptom | First response |
+| --- | --- |
+| `LatencySentinelFreshBreach` | Confirm p95/p99 and sample size in the originating batch. Compare the collection window to the rollout timeline before acting. |
+| `LatencySentinelNoFreshBatch` | Check the sample producer and the last accepted timestamp. Inspect the rejection counter and validate the request payload. |
+| `LatencySentinelScrapeDown` | Check `/healthz`, then confirm that Prometheus can reach `/metrics` at its configured target. |
+| `/metrics` returns counters with no latency gauges | Submit a valid batch and scrape again. A restart clears the last evaluation. |
+
+Run `make verify-monitoring` to replay alert conditions without waiting
+through the five-minute freshness window.

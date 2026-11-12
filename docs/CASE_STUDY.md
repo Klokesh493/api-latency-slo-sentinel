@@ -14,3 +14,12 @@ oversized input, and the health endpoint.
 The batch verdict does not describe how long a breach lasted or what caused
 it. A production alert would need a measured request distribution, an
 evaluation window, and an agreed paging policy.
+
+## Monitoring design
+
+Adding a scrape endpoint lets an operator verify both the evaluated latency
+and whether sample collection is still running. Rejected requests leave the
+last accepted batch intact. A freshness rule suppresses alerts from old
+breaches and flags missing samples, while the scrape-down rule identifies a
+separate failure path. Synthetic rule tests cover healthy samples, a fresh
+breach, the five-minute cutoff, and an unreachable target.

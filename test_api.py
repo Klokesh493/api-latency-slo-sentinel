@@ -2,31 +2,31 @@ import http.client
 import json
 import threading
 import unittest
-from http.server import ThreadingHTTPServer
 
-from api import Handler, MAX_BODY
+from api import MAX_BODY, EvaluationServer
 from latency_sentinel import evaluate
 
 
 class ApiTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        cls.worker = threading.Thread(target=cls.server.serve_forever, daemon=True)
-        cls.worker.start()
+    def setUp(self):
+        self.server = EvaluationServer(("127.0.0.1", 0))
+        self.worker = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.worker.start()
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.server.shutdown()
-        cls.server.server_close()
-        cls.worker.join()
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.worker.join()
 
     def request(self, method, path, body=None):
         client = http.client.HTTPConnection(*self.server.server_address, timeout=3)
         try:
             client.request(method, path, body, {"Content-Type": "application/json"})
             response = client.getresponse()
-            return response.status, json.loads(response.read())
+            body = response.read()
+            if path == "/metrics":
+                return response.status, response.getheader("Content-Type"), body.decode()
+            return response.status, json.loads(body)
         finally:
             client.close()
 
@@ -48,3 +48,24 @@ class ApiTest(unittest.TestCase):
 
     def test_rejects_large_bodies(self):
         self.assertEqual(self.request("POST", "/evaluate", " " * (MAX_BODY + 1))[0], 413)
+
+    def test_scrape_tracks_outcomes_and_preserves_last_accepted_batch(self):
+        status, content_type, initial = self.request("GET", "/metrics")
+        self.assertEqual(status, 200)
+        self.assertEqual(content_type, "text/plain; version=0.0.4; charset=utf-8")
+        self.assertIn("api_latency_last_evaluation_timestamp_seconds 0\n", initial)
+        self.assertNotIn("api_latency_p95_seconds", initial)
+        self.request("POST", "/evaluate", '{"latency_ms":[90,110,125]}')
+        self.request("POST", "/evaluate", '{"latency_ms":[1100]}')
+        _, _, before_rejection = self.request("GET", "/metrics")
+        self.request("POST", "/evaluate", '{"latency_ms":[-1]}')
+        _, _, after_rejection = self.request("GET", "/metrics")
+        self.assertEqual(
+            after_rejection,
+            before_rejection.replace('outcome="rejected"} 0', 'outcome="rejected"} 1'),
+        )
+        self.assertIn('api_latency_evaluations_total{outcome="ok"} 1', after_rejection)
+        self.assertIn('api_latency_evaluations_total{outcome="breach"} 1', after_rejection)
+        self.assertIn("api_latency_slo_breach 1\n", after_rejection)
+        self.assertIn("api_latency_p99_seconds 1.1\n", after_rejection)
+        self.assertTrue(after_rejection.endswith("\n"))

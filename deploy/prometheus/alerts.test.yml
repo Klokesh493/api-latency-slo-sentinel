@@ -1,0 +1,50 @@
+rule_files: [alerts.yml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="latency-sentinel",instance="demo"}'
+        values: '1+0x9 0+0x2'
+      - series: 'api_latency_last_evaluation_timestamp_seconds{job="latency-sentinel",instance="demo"}'
+        values: '0 60+0x11'
+      - series: 'api_latency_slo_breach{job="latency-sentinel",instance="demo"}'
+        values: '_ 0 1 0 1+0x8'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: LatencySentinelNoFreshBatch
+        exp_alerts:
+          - exp_labels: {job: latency-sentinel, instance: demo, severity: warning}
+            exp_annotations: {summary: No fresh latency batch is available}
+      - eval_time: 1m
+        alertname: LatencySentinelFreshBreach
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: LatencySentinelFreshBreach
+        exp_alerts:
+          - exp_labels: {job: latency-sentinel, instance: demo, severity: warning}
+            exp_annotations: {summary: Latest latency batch crossed a threshold}
+      - eval_time: 2m
+        alertname: LatencySentinelNoFreshBatch
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: LatencySentinelFreshBreach
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: LatencySentinelFreshBreach
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: LatencySentinelNoFreshBatch
+        exp_alerts:
+          - exp_labels: {job: latency-sentinel, instance: demo, severity: warning}
+            exp_annotations: {summary: No fresh latency batch is available}
+      - eval_time: 10m
+        alertname: LatencySentinelNoFreshBatch
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: LatencySentinelScrapeDown
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: LatencySentinelScrapeDown
+        exp_alerts:
+          - exp_labels: {job: latency-sentinel, instance: demo, severity: warning}
+            exp_annotations: {summary: Prometheus cannot scrape the latency sentinel}
