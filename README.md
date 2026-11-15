@@ -3,6 +3,8 @@
 Evaluate a CSV or JSON batch against p95 and p99 latency thresholds, then
 follow the decision through a Prometheus scrape and alert.
 
+[Skills and verification](docs/ENGINEERING_NOTES.md)
+
 ## Business problem
 
 Averages can hide slow requests during a rollout. An SRE reviewing a release
